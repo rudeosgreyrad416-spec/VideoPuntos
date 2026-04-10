@@ -11,13 +11,13 @@ app.use(express.json());
 // Servir archivos estáticos
 app.use(express.static(path.join(__dirname, '/')));
 
-// CONEXIÓN A BASE DE DATOS (Configuración Interna de Railway)
+// CONEXIÓN A BASE DE DATOS
 const db = mysql.createPool({
-    host: 'mysql.railway.internal',
-    user: 'root',
-    password: 'bAfFDUKvFhJjCvUiXsXyhYtYmyvCOmpX',
-    database: 'railway',
-    port: 3306,
+    host: process.env.MYSQLHOST || 'mysql.railway.internal',
+    user: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || 'bAfFDUKvFhJjCvUiXsXyhYtYmyvCOmpX',
+    database: process.env.MYSQLDATABASE || 'railway',
+    port: process.env.MYSQLPORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -28,49 +28,49 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- RUTA DE REGISTRO ---
-app.post('/api/trpc/registration.register', (req, res) => {
-    if (!req.body.json) {
-        return res.status(400).json({ error: { message: "Datos no recibidos correctamente" } });
+// --- RUTA DE REGISTRO (Simplificada para tu HTML) ---
+app.post('/registro', (req, res) => {
+    // El HTML envía: { user, email, pass }
+    const { user, email, pass } = req.body;
+
+    if (!user || !email || !pass) {
+        return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
-    // El HTML envía: regUser, regEmail, regPass
-    const { regUser, regEmail, regPass } = req.body.json;
     const query = "INSERT INTO usuarios (username, email, password) VALUES (?, ?, ?)";
     
-    db.query(query, [regUser, regEmail, regPass], (err, result) => {
+    db.query(query, [user, email, pass], (err, result) => {
         if (err) {
             console.error("Error en DB:", err);
             if (err.code === 'ER_DUP_ENTRY') {
-                return res.status(409).json({ error: { data: { code: 'CONFLICT' } } });
+                return res.status(409).json({ message: "El usuario o email ya existe" });
             }
-            return res.status(500).json({ error: { message: "Error al registrar en la base de datos" } });
+            return res.status(500).json({ message: "Error al registrar en la base de datos" });
         }
-        res.json({ result: { data: { success: true } } });
+        res.json({ success: true, message: "Usuario creado correctamente" });
     });
 });
 
-// --- RUTA DE LOGIN ---
-app.post('/api/trpc/login', (req, res) => {
-    if (!req.body.json) {
-        return res.status(400).json({ error: { message: "Datos no recibidos" } });
+// --- RUTA DE LOGIN (Simplificada para tu HTML) ---
+app.post('/login', (req, res) => {
+    const { email, pass } = req.body;
+
+    if (!email || !pass) {
+        return res.status(400).json({ message: "Email y contraseña requeridos" });
     }
 
-    // IMPORTANTE: El HTML envía loginEmail y loginPass
-    const { loginEmail, loginPass } = req.body.json;
     const query = "SELECT username, email FROM usuarios WHERE email = ? AND password = ?";
     
-    db.query(query, [loginEmail, loginPass], (err, result) => {
+    db.query(query, [email, pass], (err, result) => {
         if (err) {
             console.error("Error en Login:", err);
-            return res.status(500).json({ error: { message: "Error en el servidor" } });
+            return res.status(500).json({ message: "Error en el servidor" });
         }
         
         if (result.length > 0) {
-            // Login exitoso: Devolvemos el usuario para el localStorage del HTML
-            res.json({ result: { data: { success: true, user: result[0] } } });
+            res.json({ success: true, user: result[0] });
         } else {
-            res.status(401).json({ error: { message: "Correo o contraseña incorrectos" } });
+            res.status(401).json({ message: "Correo o contraseña incorrectos" });
         }
     });
 });
@@ -79,7 +79,4 @@ app.post('/api/trpc/login', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 Servidor funcionando en puerto ${PORT}`);
-    console.log(`📡 Conectado a la base de datos interna de Railway`);
 });
-
-module.exports = app;
